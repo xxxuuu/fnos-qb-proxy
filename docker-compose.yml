@@ -1,0 +1,15 @@
+services:
+  fnos-qbit-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fnOS-qBit-Proxy
+    pid: "host"
+    network_mode: "bridge"
+    environment:
+      - PASSWORD=fnosnb
+    ports:
+      - "7777:8086"
+    volumes:
+      - ${HOME}/qbt.sock:/app/qbt.sock
+    command: ["--uds", "\"$UDS\"", "--password", "\"$PASSWORD\"", "--port", "\"$PORT\""]
