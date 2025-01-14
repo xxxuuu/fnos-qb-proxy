@@ -25,12 +25,6 @@ COPY fnos-qb-proxy_linux-amd64 /usr/local/bin/fnos-qb-proxy
       - PASSWORD=fnosnb
 ```
 
-⚠️ 只要您的用户名不是`Qiqi-is-so-cute`，请修改如下字段中的`Qiqi-is-so-cute`为您的用户名：
-```
-    volumes:
-      - /home/Qiqi-is-so-cute/qbt.sock:/app/qbt.sock
-```
-
 然后开始构建并启动，如下。
 
 ## 构建镜像，启动容器
@@ -39,7 +33,7 @@ COPY fnos-qb-proxy_linux-amd64 /usr/local/bin/fnos-qb-proxy
 
 ### SSH
 
-SSH访问您的主机，然后在含有`Dockerfile`、`docker-compose.yml`以及二进制文件`fnos-qb-proxy_linux-amd64`的目录下执行`docker-compose up -d`。
+SSH访问您的主机，然后在含有`Dockerfile`、`docker-compose.yml`以及二进制文件`fnos-qb-proxy_linux-amd64`的目录下执行`docker compose up -d`。
 
 ### fnOS WebUI / 飞牛OS网页版
 

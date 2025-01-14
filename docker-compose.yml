@@ -11,4 +11,4 @@ services:
     ports:
       - "7777:8086"
     volumes:
-      - /home/Qiqi-is-so-cute/qbt.sock:/app/qbt.sock
+      - ${HOME}/qbt.sock:/app/qbt.sock
