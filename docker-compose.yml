@@ -11,5 +11,4 @@ services:
     ports:
       - "7777:8086"
     volumes:
-      - ${HOME}/qbt.sock:/app/qbt.sock
-    command: ["--uds", "\"$UDS\"", "--password", "\"$PASSWORD\"", "--port", "\"$PORT\""]
+      - /home/Qiqi/qbt.sock:/app/qbt.sock

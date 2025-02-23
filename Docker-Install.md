@@ -25,6 +25,12 @@ COPY fnos-qb-proxy_linux-amd64 /usr/local/bin/fnos-qb-proxy
       - PASSWORD=fnosnb
 ```
 
+⚠️ 只要您的用户名不是`Qiqi`，您必须将以下内容中的`Qiqi`替换为您的用户名：
+```
+    volumes:
+      - /home/Qiqi/qbt.sock:/app/qbt.sock
+```
+
 然后开始构建并启动，如下。
 
 ## 构建镜像，启动容器
@@ -43,3 +49,44 @@ SSH访问您的主机，然后在含有`Dockerfile`、`docker-compose.yml`以及
 4. 选择`确定`
 
 此时您的容器应该正常运行，并且您将会在`7777`或您指定的端口号上访问飞牛自带的`trim-qbittorrent`的WebUI。
+
+## 确保下载中心服务在Docker服务之前启动
+
+我们注意到在fnOS中，Docker服务可能在下载中心启动之前完成启动，导致`~/qbt.sock`被Docker意外占用，进而导致下载中心携带的的qBittorrent进程无法正常启动。因此，我们需要确保下载中心服务在Docker服务之前启动，具体方法为如下。
+
+在终端/SSH中运行`sudo systemctl edit docker.service`，默认情况下，这将打开一个由Nano编辑器承载的`/etc/systemd/system/docker.service.d/override.conf`编辑窗口，此时在
+
+```
+### Anything between here and the comment below will become the new contents of the file
+```
+（从1开始数，通常位于第2行）
+
+以及
+
+```
+### Lines below this comment will be discarded
+```
+（通常位于第6行）
+
+这两行注释（通常显示为蓝色）之间添加如下内容：
+```
+[Unit]
+After=dlcenter.service
+```
+
+确保前几行看起来像是：
+```
+### Editing /etc/systemd/system/docker.service.d/override.conf
+### Anything between here and the comment below will become the new contents of the file
+
+[Unit]
+After=dlcenter.service
+
+### Lines below this comment will be discarded
+
+### /etc/systemd/system/docker.service
+```
+
+这将使`dlcenter.service`（fnOS的下载中心服务，亦负责启动自带的qBittorrent）在`docker.service`之前运行。
+
+最后，运行`sudo systemctl daemon-reload`来使得这些修改生效。
