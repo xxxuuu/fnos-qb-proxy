@@ -31,14 +31,14 @@ COMMANDS:
    help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-   --password value, -p value  if not set, any password will be accepted
+   --password value, -p value  if not set, qBittorrent will login automatically
    --uds value                 qBittorrent unix domain socket(uds) path (default: "/home/admin/qbt.sock")
    --debug, -d                 (default: false)
    --port value                proxy running port (default: 8080)
    --help, -h                  show help
 ```
 
-运行后，访问 `http://{host}:8080` 即可进入 qBittorrent WebUI。默认情况下用户名为 `admin`，输入任意密码均可访问，如果通过 `--password` 指定了密码，则只有该密码可访问；`--port` 修改运行端口
+运行后，访问 `http://{host}:8080` 即可进入 qBittorrent WebUI。默认情况会自动登录，如果通过 `--password` 指定了密码，则只有该密码可访问；`--port` 修改运行端口
 ```bash
 $ ./fnos-qb-proxy --uds "/home/admin/qbt.sock"
 proxy running on port 8080

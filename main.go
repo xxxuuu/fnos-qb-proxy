@@ -37,7 +37,8 @@ func fetchQbPassword() (string, error) {
 	return "", fmt.Errorf("no qbittorrent-nox process found")
 }
 
-func fetchQbSid(uds string, password string) (string, error) {
+// login to qBittorrent and return SID cookie value
+func login(uds string, password string) (string, error) {
 	client := &http.Client{
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -97,7 +98,7 @@ func proxyCmd(ctx *cli.Context) error {
 		if expectedPassword != "" {
 			return ""
 		}
-		sid, err := fetchQbSid(uds, password)
+		sid, err := login(uds, password)
 		if err != nil {
 			fmt.Printf("fetch qbittorrent-nox sid: %v\n", err)
 		}
@@ -190,7 +191,7 @@ func main() {
 			&cli.StringFlag{
 				Name:    "password",
 				Aliases: []string{"p"},
-				Usage:   "if not set, any password will be accepted",
+				Usage:   "if not set, qBittorrent will login automatically",
 				Value:   "",
 			},
 			&cli.StringFlag{
