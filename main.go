@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"regexp"
@@ -36,6 +37,40 @@ func fetchQbPassword() (string, error) {
 	return "", fmt.Errorf("no qbittorrent-nox process found")
 }
 
+func fetchQbSid(uds string, password string) (string, error) {
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return net.Dial("unix", uds)
+			},
+		},
+	}
+
+	data := url.Values{}
+	data.Set("username", "admin")
+	data.Set("password", password)
+
+	req, err := http.NewRequest("POST", "http://unix/api/v2/auth/login", strings.NewReader(data.Encode()))
+	if err != nil {
+		return "", fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == "SID" {
+			return cookie.Value, nil
+		}
+	}
+
+	return "", fmt.Errorf("no SID cookie found")
+}
+
 func watchQbPassword(ch chan string) {
 	ticker := time.NewTicker(1 * time.Second)
 	for range ticker.C {
@@ -58,6 +93,18 @@ func proxyCmd(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("fetch qbittorrent-nox password: %w", err)
 	}
+	updateSid := func() string {
+		if expectedPassword != "" {
+			return ""
+		}
+		sid, err := fetchQbSid(uds, password)
+		if err != nil {
+			fmt.Printf("fetch qbittorrent-nox sid: %v\n", err)
+		}
+		return sid
+	}
+
+	sid := updateSid()
 
 	debugf := func(format string, args ...any) {
 		if debug {
@@ -74,9 +121,10 @@ func proxyCmd(ctx *cli.Context) error {
 			if newPassword == password {
 				continue
 			}
-
 			password = newPassword
+			sid = updateSid()
 			fmt.Printf("new password: %s\n", password)
+			fmt.Printf("new sid: %s\n", sid)
 		}
 	}()
 
@@ -91,6 +139,13 @@ func proxyCmd(ctx *cli.Context) error {
 			r.Out.URL.Scheme = "http"
 			r.Out.URL.Host = fmt.Sprintf("file://%s", uds)
 			r.Out.Host = fmt.Sprintf("file://%s", uds)
+			if sid != "" {
+				// Always set the correct SID for authentication
+				r.Out.AddCookie(&http.Cookie{
+					Name:  "SID",
+					Value: sid,
+				})
+			}
 
 			body, _ := io.ReadAll(r.In.Body)
 			r.In.ParseForm()
