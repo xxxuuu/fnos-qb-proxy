@@ -113,7 +113,7 @@ func (p *FnosProxy) debugf(format string, args ...any) {
 	}
 }
 
-func (p *FnosProxy) updateSidFromResp(resp *http.Response) error {
+func (p *FnosProxy) updateSid(resp *http.Response) error {
 	for _, cookie := range resp.Cookies() {
 		if cookie.Name == "SID" {
 			p.sid = cookie.Value
@@ -140,7 +140,7 @@ func (p *FnosProxy) reloadSid() error {
 	}
 	defer resp.Body.Close()
 
-	if err := p.updateSidFromResp(resp); err != nil {
+	if err := p.updateSid(resp); err != nil {
 		return fmt.Errorf("update SID from cookies: %w", err)
 	}
 	return nil
@@ -190,10 +190,10 @@ func (p *FnosProxy) ModifyResponse(resp *http.Response) error {
 		return nil
 	}
 	// update SID from response cookies
-	p.updateSidFromResp(resp)
+	p.updateSid(resp)
 
 	contentType := resp.Header.Get("Content-Type")
-	// for any non-HTML response with 403 status, refresh SID
+	// for any non-HTML response with 403 status, reload SID
 	if !strings.Contains(contentType, "text/html") && resp.StatusCode == http.StatusForbidden {
 		return p.reloadSid()
 	}
@@ -221,8 +221,7 @@ func (p *FnosProxy) ModifyResponse(resp *http.Response) error {
 		}
 		resp.Body.Close()
 
-		// Check if body contains loginform
-		if strings.Contains(string(body), `id="loginform"`) || strings.Contains(string(body), `id='loginform'`) {
+		if match, _ := regexp.MatchString(`<form[^>]+id=["']loginform["']`, string(body)); match {
 			fmt.Printf("login page detected, refetching with new SID...\n")
 			// update the sid
 			err := p.reloadSid()
