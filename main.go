@@ -190,6 +190,13 @@ func proxyCmd(ctx *cli.Context) error {
 		},
 
 		ModifyResponse: func(resp *http.Response) error {
+			// update sid if resp has Set-Cookie header with SID
+			for _, cookie := range resp.Cookies() {
+				if cookie.Name == "SID" {
+					sid = cookie.Value[4:] // trim "SID="
+					debugf("updated sid: %s\n", sid)
+				}
+			}
 			contentType := resp.Header.Get("Content-Type")
 			// for any non-HTML response with 403 status, refresh SID
 			if !strings.Contains(contentType, "text/html") && resp.StatusCode == http.StatusForbidden {
