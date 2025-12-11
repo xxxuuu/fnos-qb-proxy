@@ -54,16 +54,12 @@ func NewFnosProxy(uds string, debug bool, expectedPassword string, port int) *Fn
 		expectedPassword: expectedPassword,
 		port:             port,
 	}
+
 	p.ReverseProxy = &httputil.ReverseProxy{
 		Transport:      transport,
 		Rewrite:        p.Rewrite,
 		ModifyResponse: p.ModifyResponse,
-		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			fmt.Printf("http: proxy error: %v\n", err)
-			w.WriteHeader(http.StatusBadGateway)
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			fmt.Fprintf(w, "<h1>Proxy Error</h1><p>%v</p>", err)
-		},
+		ErrorHandler:   p.ErrorHandler,
 	}
 	return p
 }
@@ -166,6 +162,13 @@ func (p *FnosProxy) handlAuth(r *httputil.ProxyRequest, body []byte) error {
 		r.Out.ContentLength = int64(len(body))
 	}
 	return nil
+}
+
+func (p *FnosProxy) ErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
+	fmt.Printf("http: proxy error: %v\n", err)
+	w.WriteHeader(http.StatusBadGateway)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, "<h1>Proxy Error</h1><p>%v</p>", err)
 }
 
 func (p *FnosProxy) Rewrite(r *httputil.ProxyRequest) {
