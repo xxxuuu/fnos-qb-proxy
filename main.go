@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -37,8 +38,8 @@ func fetchQbPassword() (string, error) {
 	return "", fmt.Errorf("no qbittorrent-nox process found")
 }
 
-// login to qBittorrent and return SID cookie value
-func login(uds string, password string) (string, error) {
+// makeRequest makes an HTTP request to qBittorrent via unix socket
+func makeRequest(uds string, method string, path string, body io.Reader, configure func(*http.Request)) (*http.Response, error) {
 	client := &http.Client{
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -47,19 +48,35 @@ func login(uds string, password string) (string, error) {
 		},
 	}
 
+	req, err := http.NewRequest(method, "http://unix"+path, body)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	// Allow caller to configure the request
+	if configure != nil {
+		configure(req)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("do request: %w", err)
+	}
+
+	return resp, nil
+}
+
+// login to qBittorrent and return SID cookie value
+func login(uds string, password string) (string, error) {
 	data := url.Values{}
 	data.Set("username", "admin")
 	data.Set("password", password)
 
-	req, err := http.NewRequest("POST", "http://unix/api/v2/auth/login", strings.NewReader(data.Encode()))
+	resp, err := makeRequest(uds, "POST", "/api/v2/auth/login", strings.NewReader(data.Encode()), func(req *http.Request) {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	})
 	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("do request: %w", err)
+		return "", err
 	}
 	defer resp.Body.Close()
 
@@ -68,7 +85,6 @@ func login(uds string, password string) (string, error) {
 			return cookie.Value, nil
 		}
 	}
-
 	return "", fmt.Errorf("no SID cookie found")
 }
 
@@ -94,18 +110,18 @@ func proxyCmd(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("fetch qbittorrent-nox password: %w", err)
 	}
-	updateSid := func() string {
+	refreshSid := func() string {
 		if expectedPassword != "" {
 			return ""
 		}
 		sid, err := login(uds, password)
 		if err != nil {
-			fmt.Printf("fetch qbittorrent-nox sid: %v\n", err)
+			fmt.Printf("failed to fetch qbittorrent-nox sid: %v\n", err)
 		}
 		return sid
 	}
 
-	sid := updateSid()
+	sid := refreshSid()
 
 	debugf := func(format string, args ...any) {
 		if debug {
@@ -123,9 +139,8 @@ func proxyCmd(ctx *cli.Context) error {
 				continue
 			}
 			password = newPassword
-			sid = updateSid()
 			fmt.Printf("new password: %s\n", password)
-			fmt.Printf("new sid: %s\n", sid)
+			sid = refreshSid()
 		}
 	}()
 
@@ -141,7 +156,6 @@ func proxyCmd(ctx *cli.Context) error {
 			r.Out.URL.Host = fmt.Sprintf("file://%s", uds)
 			r.Out.Host = fmt.Sprintf("file://%s", uds)
 			if sid != "" {
-				// Always set the correct SID for authentication
 				r.Out.AddCookie(&http.Cookie{
 					Name:  "SID",
 					Value: sid,
@@ -173,6 +187,66 @@ func proxyCmd(ctx *cli.Context) error {
 			r.Out.Header.Del("Referer")
 			r.Out.Header.Del("Origin")
 			r.Out.Body = io.NopCloser(bytes.NewBuffer(body))
+		},
+
+		ModifyResponse: func(resp *http.Response) error {
+			contentType := resp.Header.Get("Content-Type")
+			// for any non-HTML response with 403 status, refresh SID
+			if !strings.Contains(contentType, "text/html") && resp.StatusCode == http.StatusForbidden {
+				sid = refreshSid()
+				return nil
+			}
+
+			// Check if response is HTML with login form
+			if resp.Request.URL.Path == "/" && strings.Contains(contentType, "text/html") {
+				var reader io.ReadCloser
+				var err error
+
+				// Check if response is gzip-compressed
+				if resp.Header.Get("Content-Encoding") == "gzip" {
+					reader, err = gzip.NewReader(resp.Body)
+					if err != nil {
+						resp.Body.Close()
+						return err
+					}
+					defer reader.Close()
+				} else {
+					reader = resp.Body
+				}
+
+				body, err := io.ReadAll(reader)
+				if err != nil {
+					return err
+				}
+				resp.Body.Close()
+
+				// Check if body contains loginform
+				if strings.Contains(string(body), `id="loginform"`) || strings.Contains(string(body), `id='loginform'`) {
+					fmt.Printf("login page detected, refetching with new SID...\n")
+					// update the sid
+					sid = refreshSid()
+					// refetch the request with new sid
+					newResp, err := makeRequest(uds, resp.Request.Method, resp.Request.URL.Path, nil, func(req *http.Request) {
+						req.AddCookie(&http.Cookie{
+							Name:  "SID",
+							Value: sid,
+						})
+					})
+					if err != nil {
+						return fmt.Errorf("refetch request: %w", err)
+					}
+					*resp = *newResp
+				} else {
+					// Restore the body (uncompressed)
+					resp.Body = io.NopCloser(bytes.NewReader(body))
+					// Update headers for uncompressed body
+					resp.Header.Del("Content-Encoding")
+					resp.ContentLength = int64(len(body))
+					resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(body)))
+				}
+			}
+
+			return nil
 		},
 	}
 	err = http.ListenAndServe(fmt.Sprintf(":%d", port), &proxy)
