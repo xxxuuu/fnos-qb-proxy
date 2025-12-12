@@ -10,49 +10,35 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os/exec"
 	"regexp"
 	"strings"
 )
 
-func fetchQbPassword() (string, error) {
-	// exec command "ps aux | grep [q]bittorrent-nox"
-	cmd := exec.Command("bash", "-c", "ps aux | grep [q]bittorrent-nox")
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("exec command %s: %w", cmd.String(), err)
-	}
-
-	// parse output(likes --webui-password=xxx) to get password
-	re := regexp.MustCompile(`--webui-password=(\S+)`)
-	matches := re.FindStringSubmatch(string(output))
-	if len(matches) > 1 {
-		return matches[1], nil
-	}
-
-	return "", fmt.Errorf("no qbittorrent-nox process found")
-}
-
 type FnosProxy struct {
 	*httputil.ReverseProxy
-	uds              string
 	debug            bool
 	expectedPassword string
 	sid              string
 	port             int
+	watcher          *QbMonitor
 }
 
-func NewFnosProxy(uds string, debug bool, expectedPassword string, port int) *FnosProxy {
+func NewFnosProxy(debug bool, expectedPassword string, port int) *FnosProxy {
+	watcher := NewQbMonitor()
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return net.Dial("unix", uds)
+			if uds, err := watcher.GetUds(); err != nil {
+				return nil, fmt.Errorf("get qbittorrent-nox uds: %w", err)
+			} else {
+				return net.Dial("unix", uds)
+			}
 		},
 	}
 	p := &FnosProxy{
-		uds:              uds,
 		debug:            debug,
 		expectedPassword: expectedPassword,
 		port:             port,
+		watcher:          watcher,
 	}
 
 	p.ReverseProxy = &httputil.ReverseProxy{
@@ -117,11 +103,11 @@ func (p *FnosProxy) reloadSid() error {
 	data := url.Values{}
 
 	data.Set("username", "admin")
-	password, err := fetchQbPassword()
-	if err != nil {
+	if password, err := p.watcher.GetPassword(); err != nil {
 		return fmt.Errorf("fetch qbittorrent-nox password: %w", err)
+	} else {
+		data.Set("password", password)
 	}
-	data.Set("password", password)
 
 	resp, err := p.fetch("POST", "/api/v2/auth/login", strings.NewReader(data.Encode()), func(req *http.Request) {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -139,7 +125,7 @@ func (p *FnosProxy) reloadSid() error {
 
 func (p *FnosProxy) handlAuth(r *httputil.ProxyRequest, body []byte) error {
 	if strings.Contains(r.In.URL.Path, "/api/v2/auth/login") {
-		outPassword, err := fetchQbPassword()
+		outPassword, err := p.watcher.GetPassword()
 		if err != nil {
 			return fmt.Errorf("fetch qbittorrent-nox password: %w", err)
 		}
@@ -147,8 +133,8 @@ func (p *FnosProxy) handlAuth(r *httputil.ProxyRequest, body []byte) error {
 			parts := strings.Split(string(body), "&")
 			p.debugf("parts: %v\n", parts)
 			for _, part := range parts {
-				if strings.HasPrefix(part, "password=") {
-					inputPassword := strings.TrimPrefix(part, "password=")
+				if after, ok := strings.CutPrefix(part, "password="); ok {
+					inputPassword := after
 					if inputPassword != p.expectedPassword {
 						outPassword = ""
 						break
@@ -157,7 +143,7 @@ func (p *FnosProxy) handlAuth(r *httputil.ProxyRequest, body []byte) error {
 			}
 		}
 
-		body = []byte(fmt.Sprintf("username=admin&password=%s", outPassword))
+		body = fmt.Appendf(nil, "username=admin&password=%s", outPassword)
 		r.Out.Header.Set("Content-Length", fmt.Sprintf("%d", len(body)))
 		r.Out.ContentLength = int64(len(body))
 	}
@@ -174,8 +160,8 @@ func (p *FnosProxy) ErrorHandler(w http.ResponseWriter, r *http.Request, err err
 func (p *FnosProxy) Rewrite(r *httputil.ProxyRequest) {
 	p.debugf("request: %v\n", r.In.URL.Path)
 	r.Out.URL.Scheme = "http"
-	r.Out.URL.Host = fmt.Sprintf("file://%s", p.uds)
-	r.Out.Host = fmt.Sprintf("file://%s", p.uds)
+	r.Out.URL.Host = "unix"
+	r.Out.Host = "unix"
 	if p.sid != "" {
 		r.Out.AddCookie(&http.Cookie{
 			Name:  "SID",

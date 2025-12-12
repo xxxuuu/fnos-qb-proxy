@@ -18,7 +18,6 @@ $ wget https://github.com/xxxuuu/fnos-qb-proxy/releases/download/v0.1.0/fnos-qb-
 $ chmod +x fnos-qb-proxy
 ```
 
-参数，使用 `--uds` 指定 qBittorrent 监听的 Unix domain socket. 一般在 `/home/{user}/qbt.sock` 上
 ```bash
 $ fnos-qb-proxy -h
 NAME:
@@ -32,7 +31,6 @@ COMMANDS:
 
 GLOBAL OPTIONS:
    --password value, -p value  if not set, qBittorrent will login automatically
-   --uds value                 qBittorrent unix domain socket(uds) path (default: "/home/{user}/qbt.sock")
    --debug, -d                 (default: false)
    --port value                proxy running port (default: 8080)
    --help, -h                  show help
