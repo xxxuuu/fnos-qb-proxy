@@ -20,17 +20,17 @@ type FnosProxy struct {
 	expectedPassword string
 	sid              string
 	port             int
-	watcher          *QbMonitor
+	qb               *Qbit
 }
 
 func NewFnosProxy(debug bool, expectedPassword string, port int) *FnosProxy {
-	watcher := NewQbMonitor()
+	qb := NewQbit()
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			if uds, err := watcher.GetUds(); err != nil {
-				return nil, fmt.Errorf("get qbittorrent-nox uds: %w", err)
-			} else {
+			if uds, err := qb.GetUds(); err == nil {
 				return net.Dial("unix", uds)
+			} else {
+				return nil, fmt.Errorf("get unix socket path: %w", err)
 			}
 		},
 	}
@@ -38,7 +38,7 @@ func NewFnosProxy(debug bool, expectedPassword string, port int) *FnosProxy {
 		debug:            debug,
 		expectedPassword: expectedPassword,
 		port:             port,
-		watcher:          watcher,
+		qb:               qb,
 	}
 
 	p.ReverseProxy = &httputil.ReverseProxy{
@@ -101,10 +101,9 @@ func (p *FnosProxy) reloadSid() error {
 	}
 
 	data := url.Values{}
-
 	data.Set("username", "admin")
-	if password, err := p.watcher.GetPassword(); err != nil {
-		return fmt.Errorf("fetch qbittorrent-nox password: %w", err)
+	if password, err := p.qb.GetPassword(); err != nil {
+		return fmt.Errorf("get password: %w", err)
 	} else {
 		data.Set("password", password)
 	}
@@ -125,9 +124,9 @@ func (p *FnosProxy) reloadSid() error {
 
 func (p *FnosProxy) handlAuth(r *httputil.ProxyRequest, body []byte) error {
 	if strings.Contains(r.In.URL.Path, "/api/v2/auth/login") {
-		outPassword, err := p.watcher.GetPassword()
+		outPassword, err := p.qb.GetPassword()
 		if err != nil {
-			return fmt.Errorf("fetch qbittorrent-nox password: %w", err)
+			return fmt.Errorf("get password: %w", err)
 		}
 		if !p.autoAuth() {
 			parts := strings.Split(string(body), "&")
