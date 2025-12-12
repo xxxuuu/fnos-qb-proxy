@@ -18,7 +18,7 @@ $ wget https://github.com/xxxuuu/fnos-qb-proxy/releases/download/v0.1.0/fnos-qb-
 $ chmod +x fnos-qb-proxy
 ```
 
-参数，使用 `--uds` 指定 qBittorrent 监听的 Unix domain socket. 一般在 `/home/{user}/qbt.sock` 上
+参数，使用 `--uds` 指定 qBittorrent 监听的 Unix domain socket. 一般在 `home/{user}/qbt.sock` 上
 ```bash
 $ fnos-qb-proxy -h
 NAME:
@@ -32,7 +32,7 @@ COMMANDS:
 
 GLOBAL OPTIONS:
    --password value, -p value  if not set, qBittorrent will login automatically
-   --uds value                 qBittorrent unix domain socket(uds) path (default: "/home/admin/qbt.sock")
+   --uds value                 qBittorrent unix domain socket(uds) path (default: "home/{user}/qbt.sock")
    --debug, -d                 (default: false)
    --port value                proxy running port (default: 8080)
    --help, -h                  show help
@@ -40,7 +40,7 @@ GLOBAL OPTIONS:
 
 运行后，访问 `http://{host}:8080` 即可进入 qBittorrent WebUI。默认情况会自动登录，如果通过 `--password` 指定了密码，则只有该密码可访问；`--port` 修改运行端口
 ```bash
-$ ./fnos-qb-proxy --uds "/home/admin/qbt.sock"
+$ ./fnos-qb-proxy
 proxy running on port 8080
 ```
 
@@ -59,7 +59,7 @@ Description=fnOS qBittorrent Proxy Service
 Before=dlcenter.service
 
 [Service]
-ExecStart=/usr/bin/fnos-qb-proxy --uds "/home/admin/qbt.sock"
+ExecStart=/usr/bin/fnos-qb-proxy
 Restart=always
 
 [Install]
@@ -83,7 +83,7 @@ $ sudo systemctl status fnos-qb-proxy
      Memory: 6.0M
         CPU: 122ms
      CGroup: /system.slice/fnos-qb-proxy.service
-             └─1801543 /usr/bin/fnos-qb-proxy --uds /home/admin/qbt.sock
+             └─1801543 /usr/bin/fnos-qb-proxy
 
 Oct 21 23:09:34 fnOS systemd[1]: Started fnos-qb-proxy.service - fnOS qBittorrent Proxy Service.
 Oct 21 23:09:34 fnOS fnos-qb-proxy[1801543]: proxy running on port 8080
