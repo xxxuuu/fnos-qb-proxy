@@ -10,11 +10,10 @@ import (
 )
 
 func proxyCmd(ctx *cli.Context) error {
-	uds := ctx.String("uds")
 	debug := ctx.Bool("debug")
 	port := ctx.Int("port")
 	expectedPassword := ctx.String("password")
-	proxy := NewFnosProxy(uds, debug, expectedPassword, port)
+	proxy := NewFnosProxy(debug, expectedPassword, port)
 	fmt.Printf("proxy running on port %d\n", port)
 	err := http.ListenAndServe(fmt.Sprintf(":%d", port), proxy)
 	if err != nil {
@@ -34,11 +33,6 @@ func main() {
 				Aliases: []string{"p"},
 				Usage:   "if not set, qBittorrent will login automatically",
 				Value:   "",
-			},
-			&cli.StringFlag{
-				Name:  "uds",
-				Usage: "qBittorrent unix domain socket(uds) path",
-				Value: "/home/admin/qbt.sock",
 			},
 			&cli.BoolFlag{
 				Name:    "debug",
