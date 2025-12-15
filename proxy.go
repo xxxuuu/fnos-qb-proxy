@@ -122,12 +122,12 @@ func (p *FnosProxy) reloadSid() error {
 	return nil
 }
 
-func (p *FnosProxy) handlAuth(r *httputil.ProxyRequest, body []byte) error {
+func (p *FnosProxy) handlAuth(r *httputil.ProxyRequest) {
 	if strings.Contains(r.In.URL.Path, "/api/v2/auth/login") {
-		outPassword, err := p.qb.GetPassword()
-		if err != nil {
-			return fmt.Errorf("get password: %w", err)
-		}
+		// update the login request body with correct password
+		body, _ := io.ReadAll(r.In.Body)
+		r.In.ParseForm()
+		outPassword, _ := p.qb.GetPassword()
 		if !p.autoAuth() {
 			parts := strings.Split(string(body), "&")
 			p.debugf("parts: %v\n", parts)
@@ -141,12 +141,11 @@ func (p *FnosProxy) handlAuth(r *httputil.ProxyRequest, body []byte) error {
 				}
 			}
 		}
-
 		body = fmt.Appendf(nil, "username=admin&password=%s", outPassword)
 		r.Out.Header.Set("Content-Length", fmt.Sprintf("%d", len(body)))
 		r.Out.ContentLength = int64(len(body))
+		r.Out.Body = io.NopCloser(bytes.NewBuffer(body))
 	}
-	return nil
 }
 
 func (p *FnosProxy) ErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
@@ -161,22 +160,15 @@ func (p *FnosProxy) Rewrite(r *httputil.ProxyRequest) {
 	r.Out.URL.Scheme = "http"
 	r.Out.URL.Host = "unix"
 	r.Out.Host = "unix"
+	r.Out.Header.Del("Referer")
+	r.Out.Header.Del("Origin")
 	if p.sid != "" {
 		r.Out.AddCookie(&http.Cookie{
 			Name:  "SID",
 			Value: p.sid,
 		})
 	}
-
-	body, _ := io.ReadAll(r.In.Body)
-	r.In.ParseForm()
-	err := p.handlAuth(r, body)
-	if err != nil {
-		fmt.Printf("handle auth login: %v\n", err)
-	}
-	r.Out.Header.Del("Referer")
-	r.Out.Header.Del("Origin")
-	r.Out.Body = io.NopCloser(bytes.NewBuffer(body))
+	p.handlAuth(r)
 }
 
 func (p *FnosProxy) ModifyResponse(resp *http.Response) error {
