@@ -9,6 +9,6 @@ services:
     environment:
       - PASSWORD=fnosnb
     ports:
-      - "7777:8086"
+    - "7777:8086"
     volumes:
-      - /home/Qiqi/qbt.sock:/app/qbt.sock
+      - /home/Kainichy/qbt.sock:/home/Kainichy/qbt.sock
