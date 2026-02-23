@@ -1,8 +1,6 @@
 services:
   fnos-qbit-proxy:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/xxxuuu/fnos-qb-proxy:latest
     container_name: fnOS-qBit-Proxy
     pid: 'host'
     network_mode: 'bridge'

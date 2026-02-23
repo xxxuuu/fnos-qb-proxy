@@ -6,7 +6,6 @@ fnOS 中自带了一个下载器（基于 qBittorrent 和 Aria2），但默认�
 
 该项目是一个简单的代理，能绕过这些限制，提供在外部访问 fnOS 的 qBittorrent 的能力同时不影响 fnOS 自身的下载器运行
 
-
 ## Get Started
 
 ### Manual Install
@@ -37,20 +36,24 @@ GLOBAL OPTIONS:
 ```
 
 运行后，访问 `http://{host}:8080` 即可进入 qBittorrent WebUI。默认情况会自动登录，如果通过 `--password` 指定了密码，则只有该密码可访问；`--port` 修改运行端口
+
 ```bash
 $ ./fnos-qb-proxy
 proxy running on port 8080
 ```
 
 ### Configure Systemd Service
+
 上面的命令会一直在前台运行，可以使用 Systemd 配置成 daemon 在后台自动运行
 
 移动 binary 到 `/usr/bin`
+
 ```bash
 $ sudo mv fnos-qb-proxy /usr/bin/
 ```
 
 将以下配置写入到 `/etc/systemd/system/fnos-qb-proxy.service`，可自行修改命令参数
+
 ```
 [Unit]
 Description=fnOS qBittorrent Proxy Service
@@ -65,12 +68,14 @@ WantedBy=multi-user.target
 ```
 
 启用服务
+
 ```bash
 $ sudo systemctl daemon-reload
 $ sudo systemctl enable --now fnos-qb-proxy
 ```
 
 查看服务状态，成功运行
+
 ```bash
 $ sudo systemctl status fnos-qb-proxy
 ● fnos-qb-proxy.service - fnOS qBittorrent Proxy Service
@@ -87,8 +92,6 @@ Oct 21 23:09:34 fnOS systemd[1]: Started fnos-qb-proxy.service - fnOS qBittorren
 Oct 21 23:09:34 fnOS fnos-qb-proxy[1801543]: proxy running on port 8080
 ```
 
+### Docker 部署
 
-
-### Docker Install
-
-See [Docker-Install.md](/Docker-Install.md). 
+见 [Docker-Install.md](/Docker-Install.md).

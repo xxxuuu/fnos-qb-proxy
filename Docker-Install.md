@@ -1,92 +1,56 @@
-# Docker Install
+# Docker 部署说明
 
-首先进行一些配置，如下。配置过程中将多次用到查找与替换的功能，建议使用支持相应功能的编辑器而非手动替换，以免出错。此外，除非您清楚地知道您在做什么，否则不建议修改其他位置的内容。
+## 使用预构建镜像
 
-## 修改Dockerfile
+镜像地址：[ghcr.io/xxxuuu/fnos-qb-proxy](https://github.com/xxxuuu/fnos-qb-proxy/pkgs/container/fnos-qb-proxy)。可用标签示例：`latest`（最新）、`v1.0.0` / `1.0.0`（发版 tag）、或某次提交的 commit 短 ID（用于开发版）。
 
-请将如下字段中的`fnos-qb-proxy_linux-amd64`改为您下载的可执行文件的文件名：
+### 方式 A：Docker Compose + WebUI（推荐）
 
-```
-COPY fnos-qb-proxy_linux-amd64 /usr/local/bin/fnos-qb-proxy
-```
+在 fnOS WebUI → Docker → Compose 中新建项目，项目名称与路径可自定。将项目内的 [docker-compose.yml](./docker-compose.yml) 内容上传或粘贴到 Compose 配置中，保存并启动即可。
 
-## 修改docker-compose.yml
+默认端口为 `7777`，密码为 `fnosnb`。可在 YAML 中修改 `- PASSWORD=fnosnb` 与 `- '7777:8086'` 两处以更改密码和端口；可在本地编辑后上传，或在 WebUI 中直接修改。
 
-如果您需要自定义代理容器在宿主机上暴露的端口号（效果相当于上文中通过`--port`参数传入的端口号），请修改如下字段中引号左边的`7777`为您所需要的端口号：
-```
-    ports:
-      - "7777:8086"
-```
+### 方式 B：`docker run`
 
-如果您需要自定义qBittorrent WebUI的访问密码（效果相当于上文中通过`-p`或`--password`参数传入的密码），请修改如下字段中的`fnosnb`为您所需要的密码，注意，此处请勿将密码修改为非ASCII字符，否则qBittorrent的WebUI将错误转译密码导致登录失败：
+fnOS WebUI 上运行容器时无法配置除了存储空间以外的挂载点，因此需要通过 ssh 连接到机器上执行命令。纯小白建议使用上方 Docker Compose + WebUI 方式
 
-```
-    environment:
-      - PASSWORD=fnosnb
-```
-
-⚠️ 只要您的用户名不是`Kainichy`，您必须将以下内容中的`Kainichy`替换为您的用户名：
-```
-    volumes:
-      - /home/Kainichy/qbt.sock:/home/Kainichy/qbt.sock
+```bash
+docker run -d \
+  --name fnOS-qBit-Proxy \
+  --pid host \
+  -e PORT=8086 \
+  -e PASSWORD=fnosnb \
+  -p 7777:8086 \
+  -v /home:/home:ro \
+  ghcr.io/xxxuuu/fnos-qb-proxy:latest
 ```
 
-然后开始构建并启动，如下。
+| 参数                                  | 说明                                                                            |
+| ------------------------------------- | ------------------------------------------------------------------------------- |
+| `-d`                                  | 后台运行容器                                                                    |
+| `--name fnOS-qBit-Proxy`              | 容器名称                                                                        |
+| `--pid host`                          | 使用宿主机 PID namespace，便于代理从 `/proc` 发现 qBittorrent 进程及其 UDS 路径 |
+| `-v /home:/home:ro`                   | 只读挂载宿主机 `/home`，使从进程命令行解析出的 `qbt.sock` 路径在容器内可访问    |
+| `-e PORT=8086`                        | 容器内代理监听端口，默认8086                                                    |
+| `-e PASSWORD=fnosnb`                  | WebUI 访问密码；默认fnosnb，按需修改                                            |
+| `-p 7777:8086`                        | 端口映射（宿主机:容器），按需修改                                               |
+| `ghcr.io/xxxuuu/fnos-qb-proxy:latest` | 镜像地址与标签，可改为 `v1.0.0` 等固定版本                                      |
 
-## 构建镜像，启动容器
+## 自行构建镜像
 
-有两种方法完成这件事。
+使用项目中的 [Dockerfile](./Dockerfile) 在本地构建镜像。需已安装 Docker。
 
-### SSH
+在有 Docker 环境的机器上 clone 项目，运行：
 
-SSH访问您的主机，然后在含有`Dockerfile`、`docker-compose.yml`以及可执行文件的目录下执行`docker compose up -d`。
-
-### fnOS WebUI / 飞牛OS网页版
-
-1. 创建一个目录，并将`Dockerfile`以及可执行文件通过您喜爱的方式上传到您的飞牛，注意此时不要上传`docker-compose.yml`，否则可能会出现错误。并且请注意，目录需要上传到一个您接下来操作的账户能够访问的目录下。
-2. 登录您的飞牛OS网页版，进入Docker应用，在边栏中选择Compose，选择`新建项目`
-3. 填写`项目名称`，选择第一步中上传的文件夹，此时在对话框中上传`docker-compose.yml`，或者复制并粘贴`docker-compose.yml`的全部内容，注意不要打乱格式。
-4. 选择`确定`
-
-此时您的容器应该正常运行，并且您将会在`7777`或您指定的端口号上访问飞牛自带的`trim-qbittorrent`的WebUI。
-
-## 确保下载中心服务在Docker服务之前启动
-
-我们注意到在fnOS中，Docker服务可能在下载中心启动之前完成启动，导致`~/qbt.sock`被Docker意外占用，进而导致下载中心携带的的qBittorrent进程无法正常启动。因此，我们需要确保下载中心服务在Docker服务之前启动，具体方法为如下。
-
-在终端/SSH中运行`sudo systemctl edit docker.service`，默认情况下，这将打开一个由Nano编辑器承载的`/etc/systemd/system/docker.service.d/override.conf`编辑窗口，此时在
-
-```
-### Anything between here and the comment below will become the new contents of the file
-```
-（从1开始数，通常位于第2行）
-
-以及
-
-```
-### Lines below this comment will be discarded
-```
-（通常位于第6行）
-
-这两行注释（通常显示为蓝色）之间添加如下内容：
-```
-[Unit]
-After=dlcenter.service
+```bash
+docker build -t fnos-qb-proxy .
 ```
 
-确保前几行看起来像是：
+若通过 Docker Compose 部署，可改为从本地构建而非拉取预构建镜像，在 [docker-compose.yml](./docker-compose.yml) 中将 `image` 改为 `build`：
+
+```diff
+-    image: ghcr.io/xxxuuu/fnos-qb-proxy:latest
++    build:
++      context: .
++      dockerfile: Dockerfile
 ```
-### Editing /etc/systemd/system/docker.service.d/override.conf
-### Anything between here and the comment below will become the new contents of the file
-
-[Unit]
-After=dlcenter.service
-
-### Lines below this comment will be discarded
-
-### /etc/systemd/system/docker.service
-```
-
-这将使`dlcenter.service`（fnOS的下载中心服务，亦负责启动自带的qBittorrent）在`docker.service`之前运行。
-
-最后，运行`sudo systemctl daemon-reload`来使得这些修改生效。
