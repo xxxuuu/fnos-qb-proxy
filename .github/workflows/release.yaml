@@ -1,0 +1,32 @@
+name: Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+    - name: Build
+      run: |
+        CGO_ENABLED=0 GOARCH=${{ matrix.arch }} GOOS=linux go build -o fnos-qb-proxy_linux-${{ matrix.arch }}
+    - uses: softprops/action-gh-release@v2
+      with:
+        draft: true
+        generate_release_notes: true
+        make_latest: true
+        files: |
+          fnos-qb-proxy_linux-${{ matrix.arch }}
