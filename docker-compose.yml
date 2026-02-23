@@ -4,11 +4,11 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: fnOS-qBit-Proxy
-    pid: "host"
-    network_mode: "bridge"
+    pid: 'host'
+    network_mode: 'bridge'
     environment:
       - PASSWORD=fnosnb
     ports:
-    - "7777:8086"
+      - '7777:8086'
     volumes:
-      - /home/Kainichy/qbt.sock:/home/Kainichy/qbt.sock
+      - /home:/home:ro

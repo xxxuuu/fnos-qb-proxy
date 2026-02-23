@@ -1,3 +1,16 @@
+FROM golang:1.22.0 AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+
+RUN go mod download && go mod verify
+
+COPY . .
+
+RUN CGO_ENABLED=0 go build -o fnos-qb-proxy
+RUN chmod +x fnos-qb-proxy
+
 FROM alpine:latest
 
 ENV LANG=C.UTF-8 \
@@ -5,12 +18,6 @@ ENV LANG=C.UTF-8 \
     PASSWORD="fnosnb"
 
 WORKDIR /app
+COPY --from=builder /app/fnos-qb-proxy /usr/local/bin/fnos-qb-proxy
 
-COPY fnos-qb-proxy_linux-amd64 /usr/local/bin/fnos-qb-proxy
-
-RUN chmod +x /usr/local/bin/fnos-qb-proxy && \
-    echo "https://mirrors.tuna.tsinghua.edu.cn/alpine/latest-stable/main" > /etc/apk/repositories && \ 
-    echo "https://mirrors.tuna.tsinghua.edu.cn/alpine/latest-stable/community" >> /etc/apk/repositories && \ 
-    apk add --no-cache libc6-compat
-
-CMD ["sh", "-c", "fnos-qb-proxy --password $PASSWORD --port $PORT"]
+ENTRYPOINT ["sh", "-c", "exec fnos-qb-proxy --password \"$PASSWORD\" --port \"$PORT\" \"$@\"", "--"]
