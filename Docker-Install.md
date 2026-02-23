@@ -4,7 +4,7 @@
 
 ## 修改Dockerfile
 
-如果您修改了二进制文件的名称，请将如下字段中的`fnos-qb-proxy_linux-amd64`改为您修改的文件名：
+请将如下字段中的`fnos-qb-proxy_linux-amd64`改为您下载的可执行文件的文件名：
 
 ```
 COPY fnos-qb-proxy_linux-amd64 /usr/local/bin/fnos-qb-proxy
@@ -25,10 +25,10 @@ COPY fnos-qb-proxy_linux-amd64 /usr/local/bin/fnos-qb-proxy
       - PASSWORD=fnosnb
 ```
 
-⚠️ 只要您的用户名不是`Qiqi`，您必须将以下内容中的`Qiqi`替换为您的用户名：
+⚠️ 只要您的用户名不是`Kainichy`，您必须将以下内容中的`Kainichy`替换为您的用户名：
 ```
     volumes:
-      - /home/Qiqi/qbt.sock:/app/qbt.sock
+      - /home/Kainichy/qbt.sock:/home/Kainichy/qbt.sock
 ```
 
 然后开始构建并启动，如下。
@@ -39,11 +39,11 @@ COPY fnos-qb-proxy_linux-amd64 /usr/local/bin/fnos-qb-proxy
 
 ### SSH
 
-SSH访问您的主机，然后在含有`Dockerfile`、`docker-compose.yml`以及二进制文件`fnos-qb-proxy_linux-amd64`的目录下执行`docker compose up -d`。
+SSH访问您的主机，然后在含有`Dockerfile`、`docker-compose.yml`以及可执行文件的目录下执行`docker compose up -d`。
 
 ### fnOS WebUI / 飞牛OS网页版
 
-1. 将含有`Dockerfile`以及二进制文件`fnos-qb-proxy_linux-amd64`的目通过您喜爱的方式上传到您的飞牛，注意此时不要上传`docker-compose.yml`，否则可能会出现错误。并且请注意，目录需要上传到一个您接下来操作的账户能够访问的目录下。
+1. 创建一个目录，并将`Dockerfile`以及可执行文件通过您喜爱的方式上传到您的飞牛，注意此时不要上传`docker-compose.yml`，否则可能会出现错误。并且请注意，目录需要上传到一个您接下来操作的账户能够访问的目录下。
 2. 登录您的飞牛OS网页版，进入Docker应用，在边栏中选择Compose，选择`新建项目`
 3. 填写`项目名称`，选择第一步中上传的文件夹，此时在对话框中上传`docker-compose.yml`，或者复制并粘贴`docker-compose.yml`的全部内容，注意不要打乱格式。
 4. 选择`确定`
