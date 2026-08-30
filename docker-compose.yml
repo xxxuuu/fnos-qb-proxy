@@ -10,3 +10,4 @@ services:
       - '7777:8086'
     volumes:
       - /home:/home:ro
+      - /usr/trim/var/downloadcenter:/usr/trim/var/downloadcenter:ro
