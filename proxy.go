@@ -100,26 +100,37 @@ func (p *FnosProxy) reloadSid() error {
 		return nil
 	}
 
+	passwords, err := p.qb.GetPasswords()
+	if err != nil {
+		return fmt.Errorf("get passwords: %w", err)
+	}
+	var lastErr error
+	for _, password := range passwords {
+		resp, err := p.login(password)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode == http.StatusForbidden {
+			return fmt.Errorf("qBittorrent rejected login with HTTP 403; refusing to retry")
+		}
+		if err := p.updateSid(resp); err == nil {
+			resp.Body.Close()
+			return nil
+		} else {
+			lastErr = err
+		}
+		resp.Body.Close()
+	}
+	return lastErr
+}
+
+func (p *FnosProxy) login(password string) (*http.Response, error) {
 	data := url.Values{}
 	data.Set("username", "admin")
-	if password, err := p.qb.GetPassword(); err != nil {
-		return fmt.Errorf("get password: %w", err)
-	} else {
-		data.Set("password", password)
-	}
-
-	resp, err := p.fetch("POST", "/api/v2/auth/login", strings.NewReader(data.Encode()), func(req *http.Request) {
+	data.Set("password", password)
+	return p.fetch("POST", "/api/v2/auth/login", strings.NewReader(data.Encode()), func(req *http.Request) {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	})
-	if err != nil {
-		return fmt.Errorf("login request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if err := p.updateSid(resp); err != nil {
-		return fmt.Errorf("update SID from cookies: %w", err)
-	}
-	return nil
 }
 
 func (p *FnosProxy) handlAuth(r *httputil.ProxyRequest) {

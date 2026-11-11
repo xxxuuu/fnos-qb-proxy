@@ -11,19 +11,25 @@ import (
 )
 
 type Qbit struct {
-	password string
-	uds      string
+	passwords []string
+	uds       string
 }
 
-func NewQbit() *Qbit {
-	return &Qbit{}
+func NewQbit() *Qbit { return &Qbit{} }
+
+func (q *Qbit) GetPasswords() ([]string, error) {
+	if err := q.refresh(); err != nil {
+		return nil, fmt.Errorf("refresh qbittorrent parameters: %w", err)
+	}
+	return q.passwords, nil
 }
 
 func (q *Qbit) GetPassword() (string, error) {
-	if err := q.refresh(); err != nil {
-		return "", fmt.Errorf("refresh qbittorrent parameters: %w", err)
+	passwords, err := q.GetPasswords()
+	if err != nil {
+		return "", err
 	}
-	return q.password, nil
+	return passwords[0], nil
 }
 
 func (q *Qbit) GetUds() (string, error) {
@@ -36,9 +42,6 @@ func (q *Qbit) GetUds() (string, error) {
 	return q.uds, nil
 }
 
-// refresh reads qBittorrent's current socket path and recovers its password.
-// Newer fnOS builds mask the password in qBittorrent's argv, so the fallback
-// extracts the login body retained by dlcenter in its own memory.
 func (q *Qbit) refresh() error {
 	pid, cmdline, err := findQbittorrentProcess()
 	if err != nil {
@@ -52,12 +55,13 @@ func (q *Qbit) refresh() error {
 		return fmt.Errorf("get webui-password: %w", err)
 	}
 	if isMasked(password) {
-		password, err = findPasswordFromDlcenter(pid)
+		q.passwords, err = findPasswordsFromDlcenter(pid)
 		if err != nil {
 			return fmt.Errorf("recover masked webui-password: %w", err)
 		}
+	} else {
+		q.passwords = []string{password}
 	}
-	q.password = password
 	return nil
 }
 
@@ -85,8 +89,7 @@ func findQbittorrentProcess() (int, string, error) {
 }
 
 func getCmdParams(cmd string, parameter string) (string, error) {
-	re := regexp.MustCompile(fmt.Sprintf(`--%s=(\S+)`, parameter))
-	matches := re.FindStringSubmatch(cmd)
+	matches := regexp.MustCompile(fmt.Sprintf(`--%s=(\S+)`, parameter)).FindStringSubmatch(cmd)
 	if len(matches) > 1 {
 		return matches[1], nil
 	}
@@ -94,35 +97,41 @@ func getCmdParams(cmd string, parameter string) (string, error) {
 }
 
 const (
-	loginBodyPrefix = "username=admin&password="
-	maxPasswordLen  = 64
-	maxMapSize      = 512 << 20
-	scanChunk       = 1 << 20
-	passwordWait    = 5 * time.Second
+	loginBodyPrefix       = "username=admin&password="
+	maxPasswordLen        = 64
+	maxPasswordCandidates = 3
+	maxMapSize            = 512 << 20
+	scanChunk             = 1 << 20
+	passwordWait          = 5 * time.Second
 )
 
-func isMasked(s string) bool {
-	return len(s) > 0 && strings.Trim(s, "*") == ""
-}
+func isMasked(s string) bool { return len(s) > 0 && strings.Trim(s, "*") == "" }
 
-func findPasswordFromDlcenter(qbPID int) (string, error) {
+func findPasswordsFromDlcenter(qbPID int) ([]string, error) {
 	pid, err := findProcessByExe("dlcenter")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	deadline := time.Now().Add(passwordWait)
 	for {
-		passwords, err := scanProcessMemory(pid, loginBodyPrefix)
+		candidates, err := scanProcessMemory(pid, loginBodyPrefix)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		for _, password := range passwords {
+		valid := make([]string, 0, maxPasswordCandidates)
+		for _, password := range candidates {
 			if len(password) >= 4 && len(password) <= maxPasswordLen && !isMasked(password) {
-				return password, nil
+				valid = append(valid, password)
+				if len(valid) == maxPasswordCandidates {
+					break
+				}
 			}
 		}
+		if len(valid) > 0 {
+			return valid, nil
+		}
 		if time.Now().After(deadline) {
-			return "", fmt.Errorf("no login request found in dlcenter (pid %d) for qBittorrent pid %d; run as root", pid, qbPID)
+			return nil, fmt.Errorf("no login request found in dlcenter (pid %d) for qBittorrent pid %d; run as root", pid, qbPID)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -156,7 +165,6 @@ func scanProcessMemory(pid int, prefix string) ([]string, error) {
 		return nil, fmt.Errorf("open memory: %w", err)
 	}
 	defer mem.Close()
-
 	needle := []byte(prefix)
 	var passwords []string
 	seen := make(map[string]bool)
@@ -187,8 +195,7 @@ func scanProcessMemory(pid int, prefix string) ([]string, error) {
 func scanRegion(mem *os.File, start, end int64, needle []byte, found func(string)) {
 	overlap := len(needle) + maxPasswordLen
 	buf := make([]byte, scanChunk+overlap)
-	pos := start
-	for pos < end {
+	for pos := start; pos < end; {
 		read := int64(len(buf))
 		if end-pos < read {
 			read = end - pos
@@ -220,10 +227,7 @@ func scanRegion(mem *os.File, start, end int64, needle []byte, found func(string
 
 func readPrintable(data []byte) string {
 	end := 0
-	for end < len(data) && end < maxPasswordLen {
-		if data[end] < 0x21 || data[end] > 0x7e {
-			break
-		}
+	for end < len(data) && end < maxPasswordLen && data[end] >= 0x21 && data[end] <= 0x7e {
 		end++
 	}
 	return string(data[:end])
